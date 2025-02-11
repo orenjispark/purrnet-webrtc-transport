@@ -5,63 +5,18 @@ using UnityEngine;
 
 public class PokiNetLib : MonoBehaviour
 {
-	public class ConnectedArgs
-	{
-		public string hostNetworkId;
-		public string networkId;
-		public string roomId;
-		public bool isHost;
-
-		public ConnectedArgs(string hostNetworkId, string networkId, string roomId, bool isHost)
-		{
-			this.hostNetworkId = hostNetworkId;
-			this.networkId = networkId;
-			this.roomId = roomId;
-			this.isHost = isHost;
-		}
-	}
-
-	public class ClientConnectedArgs
-	{
-		public string hostNetworkId;
-		public string networkId;
-		public string roomId;
-		public int connectionId;
-
-		public ClientConnectedArgs(string hostNetworkId, string networkId, string roomid, int connectionId)
-		{
-			this.hostNetworkId = hostNetworkId;
-			this.networkId = networkId;
-			this.connectionId = connectionId;
-			this.roomId = roomid;
-		}
-	}
-
-	public class PeerConnectedArgs
-	{
-		public string networkId;
-		public string peerNetworkId;
-		public int peerConnectionId;
-		public bool isHost;
-
-		public PeerConnectedArgs(string networkId, string peerNetworkId, int peerConnectionId, bool isHost)
-		{
-			this.networkId = networkId;
-			this.peerNetworkId = peerNetworkId;
-			this.peerConnectionId = peerConnectionId;
-			this.isHost = isHost;
-		}
-	}
-
 	public event Action<ConnectedArgs> EvOnServerConnected;
 	public event Action<ClientConnectedArgs> EvOnClientConnected;
+	public event Action<DisconectedArgs> EvOnDisconected;
+
+
 	public static event Action<string, string, ArraySegment<byte>> EvOnMessage;
 	public static event Action<PeerConnectedArgs> EvOnPeerConnected;
+	public static event Action<PeerDisconnectedArgs> EvOnPeerDisconnected;
 
 	public static PokiNetLib Instance;
 	private PokiNetLibLocalProxy localProxy;
 
-	public string currentRoomId = "";
 
 
 	private void Awake()
@@ -97,7 +52,7 @@ public class PokiNetLib : MonoBehaviour
 #if UNITY_EDITOR
 		_ = localProxy.PokiNetlib_Connect(gameId, roomId, OnNetworkCallback, OnDataReceived, OnPeerConnectedCallback);
 #else
-		PokiNetlib_Connect(gameId, roomId, OnNetworkCallback, OnDataReceived, OnPeerConnectedCallback);		
+		PokiNetlib_Connect(gameId, roomId, OnNetworkCallback, OnDataReceived, OnPeerConnectedCallback, OnDisconected, OnPeerDisconnected);		
 #endif
 	}
 
@@ -106,7 +61,7 @@ public class PokiNetLib : MonoBehaviour
 #if UNITY_EDITOR
 		_ = localProxy.PokiNetlib_ConnectClient(gameId, roomId, OnClientNetworkCallback, OnDataReceived);
 #else
-		PokiNetlib_ConnectClient(gameId, roomId, OnClientNetworkCallback, OnDataReceived);		
+		PokiNetlib_ConnectClient(gameId, roomId, OnClientNetworkCallback, OnDataReceived, OnDisconected);		
 #endif
 	}
 
@@ -138,7 +93,6 @@ public class PokiNetLib : MonoBehaviour
 		// 	+ $"\nisHost: {isHost}");
 		if (Instance)
 		{
-			Instance.currentRoomId = roomId;
 			Instance.EvOnServerConnected?.Invoke(new ConnectedArgs(hostNetworkId, networkId, roomId, isHost));
 		}
 	}
@@ -162,7 +116,6 @@ public class PokiNetLib : MonoBehaviour
 		// 	+ $"\nisHost: {isHost}");
 		if (Instance)
 		{
-			Instance.currentRoomId = roomId;
 			Instance.EvOnClientConnected?.Invoke(new ClientConnectedArgs(hostNetworkId, networkId, roomId, connectionId));
 		}
 	}
@@ -199,13 +152,30 @@ public class PokiNetLib : MonoBehaviour
 		// Debug.Log("after emit evonmessage");
 	}
 
+	[MonoPInvokeCallback(typeof(Action<string, bool>))]
+	public static void OnDisconected(string networkId, bool isHost)
+	{
+		if (Instance)
+		{
+			Instance.EvOnDisconected?.Invoke(new DisconectedArgs(networkId, isHost));
+		}
+	}
+
+	[MonoPInvokeCallback(typeof(Action<string, string>))]
+	public static void OnPeerDisconnected(string networkId, string peerNetworkId)
+	{
+		EvOnPeerDisconnected?.Invoke(new PeerDisconnectedArgs(networkId, peerNetworkId));
+	}
+
 	[DllImport("__Internal")]
 	private static extern void PokiNetlib_Connect(
 		string gameId,
 		string roomId,
 		Action<string, string, string, string, bool> callback,
 		Action<string, string, IntPtr, int> messageCallback,
-		Action<string, string, int, bool> peerConnectedCallback
+		Action<string, string, int, bool> peerConnectedCallback,
+		Action<string, bool> networkDisconnectedCalback,
+		Action<string, string> peerDisconnectedCallback
 	);
 
 	[DllImport("__Internal")]
@@ -213,7 +183,8 @@ public class PokiNetLib : MonoBehaviour
 		string gameId,
 		string roomId,
 		Action<string, string, string, string, int> callback,
-		Action<string, string, IntPtr, int> messageCallback
+		Action<string, string, IntPtr, int> messageCallback,
+		Action<string, bool> networkDisconnectedCalback
 	);
 
 	[DllImport("__Internal")]
@@ -224,4 +195,79 @@ public class PokiNetLib : MonoBehaviour
 		int offset,
 		int length
 	);
+
+
+
+	public class ConnectedArgs
+	{
+		public readonly string hostNetworkId;
+		public readonly string networkId;
+		public readonly string roomId;
+		public readonly bool isHost;
+
+		public ConnectedArgs(string hostNetworkId, string networkId, string roomId, bool isHost)
+		{
+			this.hostNetworkId = hostNetworkId;
+			this.networkId = networkId;
+			this.roomId = roomId;
+			this.isHost = isHost;
+		}
+	}
+
+	public class ClientConnectedArgs
+	{
+		public readonly string hostNetworkId;
+		public readonly string networkId;
+		public readonly string roomId;
+		public readonly int connectionId;
+
+		public ClientConnectedArgs(string hostNetworkId, string networkId, string roomid, int connectionId)
+		{
+			this.hostNetworkId = hostNetworkId;
+			this.networkId = networkId;
+			this.connectionId = connectionId;
+			this.roomId = roomid;
+		}
+	}
+
+	public class PeerConnectedArgs
+	{
+		public readonly string networkId;
+		public readonly string peerNetworkId;
+		public readonly int peerConnectionId;
+		public readonly bool isHost;
+
+		public PeerConnectedArgs(string networkId, string peerNetworkId, int peerConnectionId, bool isHost)
+		{
+			this.networkId = networkId;
+			this.peerNetworkId = peerNetworkId;
+			this.peerConnectionId = peerConnectionId;
+			this.isHost = isHost;
+		}
+	}
+
+	public class DisconectedArgs
+	{
+		public readonly string networkId;
+		public readonly bool isHost;
+
+		public DisconectedArgs(string networkId, bool isHost)
+		{
+			this.networkId = networkId;
+			this.isHost = isHost;
+		}
+	}
+
+	public class PeerDisconnectedArgs
+	{
+		public readonly string networkId;
+		public readonly string peerNetworkId;
+
+		public PeerDisconnectedArgs(string networkId, string peerNetworkId)
+		{
+			this.networkId = networkId;
+			this.peerNetworkId = peerNetworkId;
+		}
+	}
+
 }
