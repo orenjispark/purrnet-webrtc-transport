@@ -21,21 +21,40 @@ public class PokiNetLib : MonoBehaviour
 		}
 	}
 
+	public class ClientConnectedArgs
+	{
+		public string hostNetworkId;
+		public string networkId;
+		public string roomId;
+		public int connectionId;
+
+		public ClientConnectedArgs(string hostNetworkId, string networkId, string roomid, int connectionId)
+		{
+			this.hostNetworkId = hostNetworkId;
+			this.networkId = networkId;
+			this.connectionId = connectionId;
+			this.roomId = roomid;
+		}
+	}
+
 	public class PeerConnectedArgs
 	{
 		public string networkId;
 		public string peerNetworkId;
+		public int peerConnectionId;
 		public bool isHost;
 
-		public PeerConnectedArgs(string networkId, string peerNetworkId, bool isHost)
+		public PeerConnectedArgs(string networkId, string peerNetworkId, int peerConnectionId, bool isHost)
 		{
 			this.networkId = networkId;
 			this.peerNetworkId = peerNetworkId;
+			this.peerConnectionId = peerConnectionId;
 			this.isHost = isHost;
 		}
 	}
 
-	public event Action<ConnectedArgs> EvOnConnected;
+	public event Action<ConnectedArgs> EvOnServerConnected;
+	public event Action<ClientConnectedArgs> EvOnClientConnected;
 	public static event Action<string, string, ArraySegment<byte>> EvOnMessage;
 	public static event Action<PeerConnectedArgs> EvOnPeerConnected;
 
@@ -67,7 +86,7 @@ public class PokiNetLib : MonoBehaviour
 		}
 
 		EvOnPeerConnected = null;
-		EvOnConnected = null;
+		EvOnServerConnected = null;
 	}
 
 	// connect with roomId = "" , will connect as host
@@ -79,6 +98,15 @@ public class PokiNetLib : MonoBehaviour
 		_ = localProxy.PokiNetlib_Connect(gameId, roomId, OnNetworkCallback, OnDataReceived, OnPeerConnectedCallback);
 #else
 		PokiNetlib_Connect(gameId, roomId, OnNetworkCallback, OnDataReceived, OnPeerConnectedCallback);		
+#endif
+	}
+
+	public void ConnectClient(string gameId, string roomId)
+	{
+#if UNITY_EDITOR
+		_ = localProxy.PokiNetlib_ConnectClient(gameId, roomId, OnClientNetworkCallback, OnDataReceived);
+#else
+		PokiNetlib_ConnectClient(gameId, roomId, OnClientNetworkCallback, OnDataReceived);		
 #endif
 	}
 
@@ -111,14 +139,39 @@ public class PokiNetLib : MonoBehaviour
 		if (Instance)
 		{
 			Instance.currentRoomId = roomId;
-			Instance.EvOnConnected?.Invoke(new ConnectedArgs(hostNetworkId, networkId, roomId, isHost));
+			Instance.EvOnServerConnected?.Invoke(new ConnectedArgs(hostNetworkId, networkId, roomId, isHost));
 		}
 	}
 
-	[MonoPInvokeCallback(typeof(Action<string, string, bool>))]
+	[MonoPInvokeCallback(typeof(Action<string, string, string, string, int>))]
+	public static void OnClientNetworkCallback(
+		string errMessage, string hostNetworkId,
+		string networkId, string roomId,
+		int connectionId
+	)
+	{
+		if (errMessage != "")
+		{
+			Debug.Log($"ClientNetworkConnect error with message , {errMessage}");
+			return;
+		}
+
+		// Debug.Log($"unity receive callback from jslib: "
+		// 	+ $"connected with networkId {networkId}"
+		// 	+ $"\nroomId : {roomId}"
+		// 	+ $"\nisHost: {isHost}");
+		if (Instance)
+		{
+			Instance.currentRoomId = roomId;
+			Instance.EvOnClientConnected?.Invoke(new ClientConnectedArgs(hostNetworkId, networkId, roomId, connectionId));
+		}
+	}
+
+	[MonoPInvokeCallback(typeof(Action<string, string, int, bool>))]
 	public static void OnPeerConnectedCallback(
 		string networkId,
 		string peerNetworkId,
+		int peerConnectionId,
 		bool isHost
 	)
 	{
@@ -126,7 +179,7 @@ public class PokiNetLib : MonoBehaviour
 		// 	+ $"connected with networkId {networkId}"
 		// 	+ $"\npeerNetworkId : {peerNetworkId}");
 
-		EvOnPeerConnected?.Invoke(new PeerConnectedArgs(networkId, peerNetworkId, isHost));
+		EvOnPeerConnected?.Invoke(new PeerConnectedArgs(networkId, peerNetworkId, peerConnectionId, isHost));
 	}
 
 
@@ -152,7 +205,15 @@ public class PokiNetLib : MonoBehaviour
 		string roomId,
 		Action<string, string, string, string, bool> callback,
 		Action<string, string, IntPtr, int> messageCallback,
-		Action<string, string, bool> peerConnectedCallback
+		Action<string, string, int, bool> peerConnectedCallback
+	);
+
+	[DllImport("__Internal")]
+	private static extern void PokiNetlib_ConnectClient(
+		string gameId,
+		string roomId,
+		Action<string, string, string, string, int> callback,
+		Action<string, string, IntPtr, int> messageCallback
 	);
 
 	[DllImport("__Internal")]

@@ -8,17 +8,19 @@ public class PokiNetLibLocalProxy
 	public class ProxyPeer
 	{
 		public string networkId;
+		public int connectionId;
 		public bool isHost;
 
 		public void OnMesage(string senderNetworkId, IntPtr arrayPtr, int length)
 		{
-			Debug.Log($"{networkId} got message ...");
+			// Debug.Log($"{networkId} got message ...");
 			// await Awaitable.WaitForSecondsAsync(0.1f);
 			PokiNetLib.OnDataReceived(networkId, senderNetworkId, arrayPtr, length);
 		}
 	}
 
 	public Dictionary<string, ProxyPeer> peers = new();
+	private Action<string, string, int, bool> EvOnPeerConnected;
 
 
 	public async Awaitable PokiNetlib_Connect(
@@ -26,9 +28,11 @@ public class PokiNetLibLocalProxy
 		string roomId,
 		Action<string, string, string, string, bool> callback,
 		Action<string, string, IntPtr, int> messageCallback,
-		Action<string, string, bool> peerConnectedCallback
+		Action<string, string, int, bool> peerConnectedCallback
 	)
 	{
+		EvOnPeerConnected = peerConnectedCallback;
+
 		var isHost = roomId == "";
 		if (isHost)
 		{
@@ -43,6 +47,7 @@ public class PokiNetLibLocalProxy
 		{
 			networkId = networkId,
 			isHost = isHost,
+			connectionId = GetNextConnectionID(),
 		};
 
 		peers.Add(peer.networkId, peer);
@@ -57,13 +62,55 @@ public class PokiNetLibLocalProxy
 			{
 				if (e.Value == p.Value) { continue; }
 
-				Debug.Log($"invoke peer connected {peer.networkId} , {e.Value.networkId}");
-				peerConnectedCallback?.Invoke(e.Value.networkId, p.Value.networkId, p.Value.isHost);
+				// Debug.Log($"invoke peer connected {peer.networkId} , {e.Value.networkId}");
+
+				EvOnPeerConnected?.Invoke(e.Value.networkId, p.Value.networkId, p.Value.connectionId, p.Value.isHost);
 			}
 		}
 
 		var host = peers.FirstOrDefault(e => e.Value.isHost == true).Value;
 		callback?.Invoke("", host.networkId, networkId, roomId, isHost);
+	}
+
+	public async Awaitable PokiNetlib_ConnectClient(
+		string gameId,
+		string roomId,
+		Action<string, string, string, string, int> callback,
+		Action<string, string, IntPtr, int> messageCallback
+	)
+	{
+
+		Debug.Log($"call connect to localproxy as client");
+
+		//errString, networkId, roomId, isHost
+		var networkId = Guid.NewGuid().ToString();
+		var peer = new ProxyPeer()
+		{
+			networkId = networkId,
+			isHost = false,
+			connectionId = GetNextConnectionID(),
+		};
+
+		peers.Add(peer.networkId, peer);
+		Debug.Log("peer added to list");
+
+
+
+		foreach (var e in peers)
+		{
+			foreach (var p in peers)
+			{
+				if (e.Value == p.Value) { continue; }
+
+				Debug.Log($"invoke peer connected {peer.networkId} , {e.Value.networkId}");
+				EvOnPeerConnected?.Invoke(e.Value.networkId, p.Value.networkId, p.Value.connectionId, p.Value.isHost);
+			}
+		}
+
+		await Awaitable.WaitForSecondsAsync(0.15f);
+
+		var host = peers.FirstOrDefault(e => e.Value.isHost == true).Value;
+		callback?.Invoke("", host.networkId, networkId, roomId, peer.connectionId);
 	}
 
 
@@ -94,7 +141,14 @@ public class PokiNetLibLocalProxy
 
 		// Debug.Log("sender and target found. sending message...");
 		// await Awaitable.WaitForSecondsAsync(0.1f);
-		Debug.Log($"{networkId} send message to {targetNetworkId}");
+		// Debug.Log($"{networkId} send message to {targetNetworkId}");
 		targetPeer.OnMesage(networkId, arrayPtr, length);
+	}
+
+	private int connectionId = 0;
+	private int GetNextConnectionID()
+	{
+		connectionId++;
+		return connectionId;
 	}
 }

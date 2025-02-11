@@ -23,7 +23,8 @@ public class WebRTCTransport : GenericTransport, ITransport
 	public override bool isSupported => true;
 	public override ITransport transport => this;
 
-	public IReadOnlyList<Connection> connections => new List<Connection>() { };
+	public IReadOnlyList<Connection> connections => _connections;
+	private List<Connection> _connections = new();
 
 	public ConnectionState listenerState { get; private set; } = ConnectionState.Disconnected;
 	public ConnectionState clientState { get; private set; } = ConnectionState.Disconnected;
@@ -37,14 +38,11 @@ public class WebRTCTransport : GenericTransport, ITransport
 	public string gameId = "41a1e304-808e-49cc-833c-2c1e3cf54cd4";
 	public string roomId = "";
 
-	private int connectionIdCounter = 0;
-
-
 	private string playerNetworkId = "";
+	private int playerConnectionId = 0;
 	private string hostNetworkId = "";
 
 	private bool startAsHost = false;
-	private Peer server;
 	private Dictionary<int, Peer> peers = new();
 
 
@@ -72,16 +70,9 @@ public class WebRTCTransport : GenericTransport, ITransport
 		{
 			var byteData = new ByteData(odata.Array, odata.Offset, odata.Count);
 
-			if (networkId == server.networkId && startAsHost)
+			if (networkId == hostNetworkId && startAsHost)
 			{
-				Debug.Log("add msg que to server");
 				var senderPeer = peers.FirstOrDefault(e => e.Value.networkId == senderNetworkId).Value;
-
-				if (senderPeer == null)
-				{
-					Debug.LogError("cannot add message to server que. no client peer found with networkId : " + senderNetworkId);
-					return;
-				}
 
 				// append senderClientConnectionId in front of msg
 				_packer.ResetPositionAndMode(false);
@@ -89,12 +80,51 @@ public class WebRTCTransport : GenericTransport, ITransport
 				_packer.WriteBytes(odata);
 
 				var data = _packer.ToByteData();
+				Debug.Log("add msg que to server");
 				QueuePacket(data, true);
+
+				void ProcessMessage(BitPacker asd)
+				{
+					var byteData = asd.ToByteData();
+
+					byte[] arr = byteData.data;
+
+					int senderConnectionid = BitConverter.ToInt32(arr, 0);
+					var arrSegment = new ArraySegment<byte>(byteData.data, byteData.offset + 4, byteData.length - 4);
+
+					byte[] bodyArray = arrSegment.ToArray(); // Creates a NEW array from the segment
+					var bodyByteData = new ByteData(bodyArray, 0, bodyArray.Length);
+
+					Debug.Log(BitConverter.ToString(arr));
+					Debug.Log(BitConverter.ToString(bodyByteData.data));
+
+					Debug.Log($"[server] processing msg from {senderConnectionid} - {BitConverter.ToString(bodyByteData.data)}");
+
+					RaiseDataReceived(new Connection(senderConnectionid), bodyByteData, true);
+				}
+
+				// var datac = BitPackerPool.Get();
+				// datac.WriteBytes(data);
+				// ProcessMessage(datac);
+
 			}
 			else if (networkId == playerNetworkId)
 			{
 				Debug.Log("add msg que to client");
 				QueuePacket(byteData, false);
+
+				void ProcessMessage(BitPacker data)
+				{
+					var byteData = data.ToByteData();
+
+					// onDataReceived?.Invoke(new Connection(0), byteData, false);
+					Debug.Log($"[client] processing msg from server - {BitConverter.ToString(byteData.data)}");
+					RaiseDataReceived(default, byteData, false);
+				}
+
+				//var datac = BitPackerPool.Get();
+				//datac.WriteBytes(odata);
+				//ProcessMessage(datac);
 			}
 		};
 
@@ -102,22 +132,17 @@ public class WebRTCTransport : GenericTransport, ITransport
 		PokiNetLib.EvOnPeerConnected += (data) =>
 		{
 			Debug.Log($"new peer connected : {data.networkId} {data.peerNetworkId}");
-			var connection = new Connection(GetNextConnectionID());
+			var connection = new Connection(data.peerConnectionId);
 			var peer = new Peer(connection.connectionId, data.peerNetworkId);
 
 			peers.Add(connection.connectionId, peer);
 
 			if (startAsHost)
 			{
+				_connections.Add(connection);
 				onConnected?.Invoke(connection, true);
 			}
 		};
-	}
-
-	private int GetNextConnectionID()
-	{
-		connectionIdCounter++;
-		return connectionIdCounter;
 	}
 
 	public void CloseConnection(Connection conn)
@@ -137,32 +162,27 @@ public class WebRTCTransport : GenericTransport, ITransport
 		}
 
 		var pokiNetlib = PokiNetLib.Instance;
-		pokiNetlib.Connect(gameId, roomId);
+		pokiNetlib.ConnectClient(gameId, roomId);
 
 		clientState = ConnectionState.Connecting;
-		void OnConnected(PokiNetLib.ConnectedArgs data)
+		void OnConnected(PokiNetLib.ClientConnectedArgs data)
 		{
-			pokiNetlib.EvOnConnected -= OnConnected;
+			pokiNetlib.EvOnClientConnected -= OnConnected;
 			playerNetworkId = data.networkId;
 			hostNetworkId = data.hostNetworkId;
 			Debug.Log($"player networkID {playerNetworkId}");
 
-			if (data.isHost == false)
-			{
-				clientState = ConnectionState.Connected;
-				var connection = new Connection(0);
+			clientState = ConnectionState.Connected;
+			playerConnectionId = data.connectionId;
+			var connection = new Connection(data.connectionId);
 
+			// _connections.Add(connection);
 
-				_ = DelayCall(4, () =>
-				{
-					onConnectionState?.Invoke(ConnectionState.Connected, false);
-					onConnected?.Invoke(connection, false);
-				});
-
-			}
+			onConnected?.Invoke(connection, false);
+			onConnectionState?.Invoke(ConnectionState.Connected, false);
 		}
 
-		pokiNetlib.EvOnConnected += OnConnected;
+		pokiNetlib.EvOnClientConnected += OnConnected;
 	}
 
 	public void Disconnect()
@@ -183,21 +203,22 @@ public class WebRTCTransport : GenericTransport, ITransport
 			Debug.Log($"server connected : {data.networkId} , roomId : {data.roomId} ,  {data.isHost}");
 			if (data.isHost == true)
 			{
-				pokiNetlib.EvOnConnected -= OnConnected;
+				pokiNetlib.EvOnServerConnected -= OnConnected;
 
-				var connection = new Connection(0);
-				var serverPeer = new Peer(connection.connectionId, data.networkId);
-				this.server = serverPeer;
+				//var connection = new Connection(0);
+				//var serverPeer = new Peer(connection.connectionId, data.networkId);
+				//this.server = serverPeer;
 
 				hostNetworkId = data.hostNetworkId;
 				roomId = data.roomId;
 
 				listenerState = ConnectionState.Connected;
 				onConnectionState?.Invoke(ConnectionState.Connected, true);
+				//onConnected?.Invoke(default, true);
 			}
 		}
 
-		pokiNetlib.EvOnConnected += OnConnected;
+		pokiNetlib.EvOnServerConnected += OnConnected;
 	}
 
 	private async Awaitable DelayCall(int delaySec, Action call)
@@ -242,22 +263,11 @@ public class WebRTCTransport : GenericTransport, ITransport
 	public void SendToClient(Connection target, ByteData data, Channel method = Channel.ReliableOrdered)
 	{
 		var pokiNetlib = PokiNetLib.Instance;
-		if (!pokiNetlib)
-		{
-			Debug.Log("no pokinetlib found");
-		}
 
-		Debug.Log($"send to client {target.connectionId}");
 		var targetPeer = peers.GetValueOrDefault(target.connectionId);
-		if (targetPeer == null)
-		{
-			Debug.Log($"server cant send to connectionId {target.connectionId}. peer not found on clients list");
-			string keysAsString = string.Join(", ", peers.Keys.Select(k => k.ToString()));
-			Debug.Log($"available client list : {keysAsString}");
-			return;
-		}
+		Debug.Log($"Server send to client {target.connectionId} - {targetPeer.connectionId}");
+		Debug.Log(BitConverter.ToString(data.data));
 
-		var targetConnectionId = targetPeer.connectionId;
 		var newData = data;
 
 		var arr = new ArraySegment<byte>(newData.data, newData.offset, newData.length);
@@ -266,7 +276,7 @@ public class WebRTCTransport : GenericTransport, ITransport
 		try
 		{
 			IntPtr ptr = handle.AddrOfPinnedObject();
-			Debug.Log($"server send to client {hostNetworkId} {targetPeer.networkId}");
+			// Debug.Log($"server send to client {hostNetworkId} {targetPeer.networkId}");
 			pokiNetlib.SendMessage(hostNetworkId, targetPeer.networkId, ptr, arr.Offset, arr.Count);
 		}
 		finally
@@ -279,14 +289,11 @@ public class WebRTCTransport : GenericTransport, ITransport
 	public void SendToServer(ByteData data, Channel method = Channel.ReliableOrdered)
 	{
 		Debug.Log("client send to server");
+		Debug.Log(BitConverter.ToString(data.data));
+
 		var pokiNetlib = PokiNetLib.Instance;
-		if (!pokiNetlib)
-		{
-			Debug.Log("no pokinetlib found");
-		}
 
 		var arr = new ArraySegment<byte>(data.data, data.offset, data.length);
-
 		GCHandle handle = GCHandle.Alloc(data.data, GCHandleType.Pinned);
 		try
 		{
@@ -295,7 +302,7 @@ public class WebRTCTransport : GenericTransport, ITransport
 		}
 		finally
 		{
-			RaiseDataSent(default, data, false);
+			RaiseDataSent(default, data, startAsHost);
 			handle.Free();
 		}
 	}
@@ -303,7 +310,7 @@ public class WebRTCTransport : GenericTransport, ITransport
 	public void TickUpdate(float delta)
 	{
 		// throw new NotImplementedException();
-		while (serverQueue.Count > 0)
+		while (serverQueue.Count > 0 && startAsHost)
 		{
 			using var data = serverQueue.Dequeue();
 			var byteData = data.ToByteData();
@@ -311,25 +318,23 @@ public class WebRTCTransport : GenericTransport, ITransport
 			byte[] arr = byteData.data;
 
 			int senderConnectionid = BitConverter.ToInt32(arr, 0);
-			var arrSegment = new ArraySegment<byte>(byteData.data, byteData.offset + 4, data.length - 4);
-			var bodyByteData = new ByteData(arrSegment.Array, arrSegment.Offset, arrSegment.Count);
+			var arrSegment = new ArraySegment<byte>(byteData.data, byteData.offset + 4, byteData.length - 4);
+			byte[] bodyArray = arrSegment.ToArray(); // Creates a NEW array from the segment
+			var bodyByteData = new ByteData(bodyArray, 0, bodyArray.Length);
 
-			// mock
-			var clientPeer = peers.FirstOrDefault(e => e.Value.connectionId == senderConnectionid).Value;
-			if (clientPeer == null)
-			{
-				Debug.Log($"cant process serverMsgQue. client peer not found with connectionId : {senderConnectionid}");
-				return;
-			}
+			Debug.Log($"[server] processing msg from {senderConnectionid} - {BitConverter.ToString(bodyByteData.data)}");
 
-			onDataReceived?.Invoke(new Connection(clientPeer.connectionId), bodyByteData, true);
+			RaiseDataReceived(new Connection(senderConnectionid), bodyByteData, true);
 		}
 
 		while (clientQueue.Count > 0)
 		{
 			using var data = clientQueue.Dequeue();
 			var byteData = data.ToByteData();
-			onDataReceived?.Invoke(default, byteData, false);
+
+			// onDataReceived?.Invoke(new Connection(0), byteData, false);
+			Debug.Log($"[client] processing msg from server - {BitConverter.ToString(byteData.data)}");
+			RaiseDataReceived(default, byteData, false);
 		}
 	}
 

@@ -1348,9 +1348,9 @@ GameObject:
   - component: {fileID: 1893931722}
   - component: {fileID: 1893931724}
   - component: {fileID: 1893931728}
-  - component: {fileID: 1893931725}
-  - component: {fileID: 1893931729}
   - component: {fileID: 1893931730}
+  - component: {fileID: 1893931729}
+  - component: {fileID: 1893931725}
   - component: {fileID: 1893931731}
   m_Layer: 0
   m_Name: NetworkManager
@@ -1396,7 +1396,7 @@ MonoBehaviour:
   _networkRules: {fileID: 11400000, guid: d8799083b96579a42b8b2d03e4ceae98, type: 2}
   _visibilityRules: {fileID: 11400000, guid: 8f014a5bd8dc68646a2a3c0b18c5bbd8, type: 2}
   _authenticator: {fileID: 0}
-  _tickRate: 30
+  _tickRate: 1
 --- !u!114 &1893931725
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1447,13 +1447,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1893931721}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 332e746c3c3253246aacad4d5559f1fb, type: 3}
+  m_Script: {fileID: 11500000, guid: 3d7adc930879442e983d40fe8640cb0f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _masterServer: https://purrbalancer.riten.dev:8080/
-  _roomName: 3b896e32f04349708306e01bbf9b32f0
-  _region: eu-central
-  _host: eu1.purrlay.riten.dev
+  ip: 127.0.0.1
+  port: 8000
 --- !u!114 &1893931731
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1463,18 +1461,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 1893931721}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: de4778b5edf2476448bcb3ac3d9c35d5, type: 3}
+  m_Script: {fileID: 11500000, guid: 332e746c3c3253246aacad4d5559f1fb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _serverPort: 5001
-  _maxConnections: 100
-  _address: 127.0.0.1
-  _query: 
-  _path: 
-  _enableSSL: 0
-  _certPath: 
-  _certPassword: 
-  _sslProtocols: 0
+  _masterServer: https://purrbalancer.riten.dev:8080/
+  _roomName: 3a02aa728a9446d4a4282f6aac35da8f
+  _region: eu-central
+  _host: eu1.purrlay.riten.dev
 --- !u!1 &1939878135
 GameObject:
   m_ObjectHideFlags: 0

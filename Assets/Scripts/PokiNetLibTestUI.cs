@@ -83,7 +83,7 @@ public class PokiNetLibTestUI : MonoBehaviour
 			}
 		});
 
-		pokiNetLib.EvOnConnected += (data) =>
+		pokiNetLib.EvOnServerConnected += (data) =>
 		{
 			if (data.isHost)
 			{
