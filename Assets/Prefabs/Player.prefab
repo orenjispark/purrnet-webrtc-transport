@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 5585979183666363421}
   - component: {fileID: 3204862273016284234}
   - component: {fileID: 4343546193170041296}
+  - component: {fileID: 863162814176261964}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -204,6 +205,18 @@ MonoBehaviour:
   _networkRules: {fileID: 0}
   _visitiblityRules: {fileID: 0}
   playerNameText: {fileID: 4557411577745759375}
+--- !u!210 &863162814176261964
+SortingGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1730794464866557569}
+  m_Enabled: 1
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_SortAtRoot: 0
 --- !u!1 &3360961339049073835
 GameObject:
   m_ObjectHideFlags: 0

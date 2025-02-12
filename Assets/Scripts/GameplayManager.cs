@@ -50,8 +50,11 @@ public class GameplayManager : NetworkBehaviour
 	}
 
 
+	[ServerRpc]
 	private void Server_StartGameplay()
 	{
+		if (gameplayState.value != GameplayState.Init) { return; }
+
 		gameplayState.value = GameplayState.Started;
 		Debug.Log("[server] : gameplay started");
 	}
