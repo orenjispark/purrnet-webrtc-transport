@@ -4,13 +4,17 @@ using PurrNet;
 using PurrNet.Transports;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class ConnectionStarter : MonoBehaviour
 {
 	public NetworkManager networkManager;
 	public StatisticsManager statisticsManager;
 
+	public GameObject connectUIPanel;
 	public TMP_InputField roomInputField;
+	public Button hostBtn;
+	public Button clientBtn;
 
 	private void Start()
 	{
@@ -19,41 +23,52 @@ public class ConnectionStarter : MonoBehaviour
 			Debug.Log("no network manager found...");
 			return;
 		}
-		// var mppmTag = CurrentPlayer.ReadOnlyTags().ToList();
 
-		// if (mppmTag.Contains("Host"))
-		// {
-		// 	purrTransport.roomName = Guid.NewGuid().ToString(); ;
-		// 	Debug.Log($"room id: {purrTransport.roomName}");
-		// 	Debug.Log("start as host...");
-		// 	networkManager.StartServer();
-		// 	networkManager.onServerConnectionState += (state) =>
-		// 	{
-		// 		if (state == PurrNet.Transports.ConnectionState.Connected)
-		// 		{
-		// 			networkManager.StartClient();
-		// 		}
-		// 	};
-		// }
-		// else if (mppmTag.Contains("Client"))
-		// {
-		// 	Debug.Log($"room id: {purrTransport.roomName}");
-		// 	Debug.Log("start as client...");
-		// 	_ = DelayConnectAsClient();
-		// }
+		hostBtn.onClick.AddListener(() =>
+		{
+			clientBtn.interactable = false;
+			StartHost();
+		});
+
+		clientBtn.onClick.AddListener(() =>
+		{
+			hostBtn.interactable = false;
+			StartClient();
+		});
+
+		networkManager.onClientConnectionState += (state) =>
+		{
+			if (state == ConnectionState.Connected)
+			{
+				HideUI();
+				EnableAllBtns();
+			}
+		};
+	}
+
+	private void EnableAllBtns()
+	{
+		hostBtn.interactable = clientBtn.interactable = true;
+	}
+
+	private void HideUI()
+	{
+		connectUIPanel.SetActive(false);
+	}
+
+	private void ShowUI()
+	{
+		connectUIPanel.SetActive(true);
 	}
 
 	public void StartHost()
 	{
-		//Debug.Log($"room id: {purrTransport.roomName}");
 		Debug.Log("start as host...");
-
 		networkManager.onServerConnectionState += (state) =>
 		{
 			if (state == PurrNet.Transports.ConnectionState.Connected)
 			{
-				// FindFirstObjectByType<WebRTCTransport>().roomId = roomInputField.text;
-				_ = DelayCall(2, () =>
+				_ = DelayCall(1, () =>
 				{
 					networkManager.StartClient();
 				});
@@ -62,32 +77,24 @@ public class ConnectionStarter : MonoBehaviour
 		networkManager.StartServer();
 	}
 
-	private async Awaitable DelayCall(int delaySec, Action call)
-	{
-		await Awaitable.WaitForSecondsAsync(delaySec);
-		call();
-	}
-
-	private void Update()
-	{
-		if (networkManager.clientState == ConnectionState.Connected)
-		{
-			// Debug.Log($"ping: {statisticsManager.ping}");
-		}
-	}
-
 	public void StartClient()
 	{
-		//purrTransport.roomName = "dd84e7a7-0577-4600-9698-f363975ed25d";
-		//Debug.Log($"room id: {purrTransport.roomName}");
 		Debug.Log("start as client...");
 		FindFirstObjectByType<WebRTCTransport>().roomId = roomInputField.text;
 		networkManager.StartClient();
 	}
 
-	private async Awaitable DelayConnectAsClient()
+	// private void Update()
+	// {
+	// 	if (networkManager.clientState == ConnectionState.Connected)
+	// 	{
+	// 		// Debug.Log($"ping: {statisticsManager.ping}");
+	// 	}
+	// }
+
+	private async Awaitable DelayCall(int delaySec, Action call)
 	{
-		await Awaitable.WaitForSecondsAsync(1);
-		networkManager.StartClient();
+		await Awaitable.WaitForSecondsAsync(delaySec);
+		call();
 	}
 }

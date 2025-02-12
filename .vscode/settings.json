@@ -56,5 +56,5 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "play-purrnet.sln"
+    "dotnet.defaultSolution": "purrnet-pokinetlib-transport.sln"
 }

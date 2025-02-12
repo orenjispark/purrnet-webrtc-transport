@@ -1,0 +1,10 @@
+{
+	"name": "com.orenjispark.purrnet-pokinetlib-transport",
+	"version": "0.0.1",
+	"displayName": "PurrnetPokinetlibTransport",
+	"description": "experimental. only work on webgl build.",
+	"dependencies": {},
+	"author": {
+		"name": "orenjispark"
+	}
+}
